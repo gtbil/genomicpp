@@ -234,3 +234,99 @@ Rcpp::NumericVector rcpp_parallel_tajimas_d(Rcpp::IntegerMatrix mat) {
     Rcpp::Named("D", D));
   return outvec;
 }
+
+
+
+//'
+ //' rcpp_parallel_tajimas_d_resample
+ //'
+ //' @name rcpp_parallel_tajimas_d_resample
+ //' @param mat     The input matrix (k markers times n individuals).
+ //' @param bootidx A matrix (k members, n boots) where each column contains the individuals in that bootstrap sample
+ //' @return rmat The output matrix, where each column is the statistic on that column
+ //'
+ //' @export
+ // [[Rcpp::export]]
+ Rcpp::NumericVector rcpp_parallel_tajimas_d_resample(Rcpp::IntegerMatrix mat,
+                                                      Rcpp::IntgerMatrix bootidx) {
+
+   // initialize the matrix for calculating the qtys that look like pairwise distances
+   // this will use all of the data
+   Rcpp::NumericMatrix rmat(mat.ncol(), mat.ncol());
+
+   TajimasD tajimasD(mat, rmat);
+
+   RcppParallel::parallelFor(0, mat.ncol(), tajimasD);
+
+   rownames(rmat) = colnames(mat);
+   colnames(rmat) = colnames(mat);
+
+   // create the temporary for each bootstrap sample
+   Rcpp::IntegerMatrix trmat(bootidx.ncol(), bootidx.ncol());
+
+   // loop through each bootstrap column
+   for (int b = 0; b < bootidx.ncol(); b++) {
+     Integer
+   }
+
+   // calculate khat, which is like pi
+   double khat = static_cast<double>(Rcpp::sum(rmat))/(mat.ncol() * (mat.ncol() - 1));
+
+   // calculate the number of segregating sites, `S`
+   // and divide by a1= \sum_{i=1}^{n-1} 1/i
+   int S = 0;
+
+   // find each row where at least one individual has a different allele
+   for (int i = 0; i < mat.nrow(); i++) {
+     for (int j = 0; j < mat.ncol(); j++) {
+       if (mat(i, j) != 0 && mat(i, j) != -9) {
+         S += 1;
+         break;
+       }
+     }
+   }
+
+   // calculate denominator a1
+   // and axillary a2
+   double a1 = 0;
+   double a2 = 0;
+   for (int i = 1; i < mat.ncol(); i++) {
+     a1 += 1/static_cast<double>(i);
+     a2 += 1/std::pow(static_cast<double>(i), 2);
+   }
+
+   double M = S/a1;
+
+   double d = khat - M;
+
+   double n = static_cast<double>(mat.ncol());
+   double b1 = (n + 1.0)/(3.0 * (n - 1.0));
+   double b2 = 2.0 * (std::pow(n, 2) + n + 3.0)/(9.0 * n * (n - 1.0));
+   double c1 = b1 - 1/a1;
+   double c2 = b2 - (n + 2.0)/(a1 * n) + (a2/std::pow(a1, 2));
+   double e1 = c1/a1;
+   double e2 = c2/(std::pow(a1, 2) + a2);
+
+   double denom = std::sqrt(e1 * static_cast<double>(S) +
+                            e2 * static_cast<double>(S) * (static_cast<double>(S - 1.0)));
+
+   double D;
+
+   if (denom == 0.0) {
+     D = 0.0;
+   } else {
+     D = d/denom;
+   }
+
+   double pi = khat/mat.nrow() * (mat.ncol()/(mat.ncol() - 1.0));
+
+   Rcpp::NumericVector outvec = Rcpp::NumericVector::create(
+     Rcpp::Named("pi", pi),
+     Rcpp::Named("khat", khat),
+     Rcpp::Named("S", S),
+     Rcpp::Named("N", mat.nrow()),
+     Rcpp::Named("M", M),
+     Rcpp::Named("d", d),
+     Rcpp::Named("D", D));
+   return outvec;
+ }
